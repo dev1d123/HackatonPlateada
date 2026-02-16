@@ -88,6 +88,7 @@ export default function AhorraMedScreen() {
       { id: `${now}-${Math.random().toString(16).slice(2)}`, imageUri: selectedImageUri, createdAt: now },
       ...prev,
     ]);
+    router.push({ pathname: '/ahorramed-loading', params: { imageUri: selectedImageUri } });
   }, [selectedImageUri]);
 
   const confirmDelete = useCallback((id: string) => {

@@ -54,6 +54,8 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="dashboard" />
         <Stack.Screen name="ahorramed" />
+        <Stack.Screen name="ahorramed-loading" />
+        <Stack.Screen name="ahorramed-analysis" />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
