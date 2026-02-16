@@ -1,0 +1,250 @@
+{
+  "generatedAt": "2026-02-16T00:00:00.000Z",
+  "medicamentos": [
+    {
+      "id": "med-amo",
+      "inn": "Amoxicilina",
+      "presentacion": "500 mg",
+      "marca": "Amoxidal",
+      "forma": "Cápsulas",
+      "empaque": "Caja x 21",
+      "advertencias": [
+        "Puede causar malestar estomacal y diarrea.",
+        "Evitar si hay antecedentes de alergia a penicilinas.",
+        "Consulta a un profesional si estás embarazada o lactando."
+      ],
+      "ubicaciones": [
+        {
+          "id": "amo-1",
+          "nombre": "Farmacia Central",
+          "distanciaMetros": 650,
+          "direccion": "Av. Siempre Viva 123",
+          "cierraA": "22:00",
+          "precio": 12.5,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 15,
+          "lat": -12.0464,
+          "lng": -77.0428
+        },
+        {
+          "id": "amo-2",
+          "nombre": "Botica Salud Total",
+          "distanciaMetros": 1100,
+          "direccion": "Jr. Los Olivos 456",
+          "cierraA": "21:30",
+          "precio": 11.9,
+          "moneda": "USD",
+          "stock": "bajo",
+          "actualizadoHaceMin": 8,
+          "lat": -12.048,
+          "lng": -77.039
+        },
+        {
+          "id": "amo-3",
+          "nombre": "Farmacia San Martín",
+          "distanciaMetros": 1900,
+          "direccion": "Av. Grau 890",
+          "cierraA": "23:00",
+          "precio": 13.2,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 24,
+          "lat": -12.051,
+          "lng": -77.045
+        },
+        {
+          "id": "amo-4",
+          "nombre": "Botica Buen Precio",
+          "distanciaMetros": 2400,
+          "direccion": "Calle Luna 77",
+          "cierraA": "20:00",
+          "precio": 10.7,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 32,
+          "lat": -12.043,
+          "lng": -77.047
+        },
+        {
+          "id": "amo-5",
+          "nombre": "Farmacia Miraflores",
+          "distanciaMetros": 3100,
+          "direccion": "Av. Larco 1020",
+          "cierraA": "22:30",
+          "precio": 12.1,
+          "moneda": "USD",
+          "stock": "agotado",
+          "actualizadoHaceMin": 12,
+          "lat": -12.121,
+          "lng": -77.03
+        }
+      ]
+    },
+    {
+      "id": "med-ibu",
+      "inn": "Ibuprofeno",
+      "presentacion": "400 mg",
+      "marca": "IbuMax",
+      "forma": "Tabletas",
+      "empaque": "Caja x 10",
+      "advertencias": [
+        "No usar en ayunas si tienes gastritis.",
+        "Evitar si usas anticoagulantes sin supervisión médica.",
+        "No exceder la dosis recomendada."
+      ],
+      "ubicaciones": [
+        {
+          "id": "ibu-1",
+          "nombre": "Farmacia Central",
+          "distanciaMetros": 700,
+          "direccion": "Av. Siempre Viva 123",
+          "cierraA": "22:00",
+          "precio": 4.5,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 19,
+          "lat": -12.0464,
+          "lng": -77.0428
+        },
+        {
+          "id": "ibu-2",
+          "nombre": "Botica Salud Total",
+          "distanciaMetros": 1400,
+          "direccion": "Jr. Los Olivos 456",
+          "cierraA": "21:30",
+          "precio": 4.1,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 6,
+          "lat": -12.048,
+          "lng": -77.039
+        },
+        {
+          "id": "ibu-3",
+          "nombre": "Farmacia San Martín",
+          "distanciaMetros": 2100,
+          "direccion": "Av. Grau 890",
+          "cierraA": "23:00",
+          "precio": 5.0,
+          "moneda": "USD",
+          "stock": "bajo",
+          "actualizadoHaceMin": 17,
+          "lat": -12.051,
+          "lng": -77.045
+        },
+        {
+          "id": "ibu-4",
+          "nombre": "Botica Buen Precio",
+          "distanciaMetros": 2600,
+          "direccion": "Calle Luna 77",
+          "cierraA": "20:00",
+          "precio": 3.7,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 28,
+          "lat": -12.043,
+          "lng": -77.047
+        },
+        {
+          "id": "ibu-5",
+          "nombre": "Farmacia Miraflores",
+          "distanciaMetros": 3300,
+          "direccion": "Av. Larco 1020",
+          "cierraA": "22:30",
+          "precio": 4.9,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 9,
+          "lat": -12.121,
+          "lng": -77.03
+        }
+      ]
+    },
+    {
+      "id": "med-met",
+      "inn": "Metformina",
+      "presentacion": "850 mg",
+      "marca": "GlucoFast",
+      "forma": "Tabletas",
+      "empaque": "Frasco x 30",
+      "advertencias": [
+        "Tomar con alimentos para reducir molestias gastrointestinales.",
+        "Reportar signos de hipoglucemia si se combina con otros antidiabéticos.",
+        "Consulta médica si hay enfermedad renal."
+      ],
+      "ubicaciones": [
+        {
+          "id": "met-1",
+          "nombre": "Farmacia Central",
+          "distanciaMetros": 820,
+          "direccion": "Av. Siempre Viva 123",
+          "cierraA": "22:00",
+          "precio": 7.8,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 21,
+          "lat": -12.0464,
+          "lng": -77.0428
+        },
+        {
+          "id": "met-2",
+          "nombre": "Botica Salud Total",
+          "distanciaMetros": 1500,
+          "direccion": "Jr. Los Olivos 456",
+          "cierraA": "21:30",
+          "precio": 7.1,
+          "moneda": "USD",
+          "stock": "bajo",
+          "actualizadoHaceMin": 11,
+          "lat": -12.048,
+          "lng": -77.039
+        },
+        {
+          "id": "met-3",
+          "nombre": "Farmacia San Martín",
+          "distanciaMetros": 2300,
+          "direccion": "Av. Grau 890",
+          "cierraA": "23:00",
+          "precio": 8.3,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 16,
+          "lat": -12.051,
+          "lng": -77.045
+        },
+        {
+          "id": "met-4",
+          "nombre": "Botica Buen Precio",
+          "distanciaMetros": 2900,
+          "direccion": "Calle Luna 77",
+          "cierraA": "20:00",
+          "precio": 6.9,
+          "moneda": "USD",
+          "stock": "disponible",
+          "actualizadoHaceMin": 34,
+          "lat": -12.043,
+          "lng": -77.047
+        },
+        {
+          "id": "met-5",
+          "nombre": "Farmacia Miraflores",
+          "distanciaMetros": 3600,
+          "direccion": "Av. Larco 1020",
+          "cierraA": "22:30",
+          "precio": 7.5,
+          "moneda": "USD",
+          "stock": "agotado",
+          "actualizadoHaceMin": 13,
+          "lat": -12.121,
+          "lng": -77.03
+        }
+      ]
+    }
+  ],
+  "informacionAdicional": {
+    "doctor": "Dra. Valeria Ramos",
+    "hospital": "Hospital General San Miguel",
+    "observaciones": "Los resultados son una simulación (modo demo). Verifica dosis e indicaciones con un profesional."
+  }
+}
