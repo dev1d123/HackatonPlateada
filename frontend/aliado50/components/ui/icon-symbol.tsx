@@ -28,6 +28,10 @@ const MAPPING = {
   'heart.fill': 'favorite',
   'gavel.fill': 'gavel',
   'verified.fill': 'verified',
+  'map.fill': 'map',
+  'info.circle': 'info-outline',
+  'exclamationmark.triangle.fill': 'warning',
+  'mappin.and.ellipse': 'place',
 } as IconMapping;
 
 /**
