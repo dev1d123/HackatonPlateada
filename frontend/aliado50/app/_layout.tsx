@@ -49,13 +49,23 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          animationDuration: 240,
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+        }}
+      >
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="dashboard" />
         <Stack.Screen name="ahorramed" />
-        <Stack.Screen name="ahorramed-loading" />
-        <Stack.Screen name="ahorramed-analysis" />
+        <Stack.Screen name="ahorramed-loading" options={{ animation: 'fade', animationDuration: 220 }} />
+        <Stack.Screen name="ahorramed-analysis" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
+        <Stack.Screen name="ahorramed-med-detail" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
+        <Stack.Screen name="ahorramed-lugares" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

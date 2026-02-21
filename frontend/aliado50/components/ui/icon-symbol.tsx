@@ -23,6 +23,8 @@ const MAPPING = {
   xmark: 'close',
   camera: 'photo-camera',
   photo: 'photo-library',
+  magnifyingglass: 'search',
+  'text.magnifyingglass': 'search',
   trash: 'delete',
   'lock.fill': 'lock',
   'heart.fill': 'favorite',

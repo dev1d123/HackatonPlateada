@@ -41,7 +41,7 @@ const MODULES: ModuleItem[] = [
     key: 'legalasi',
     title: 'LegalAsi',
     subtitle: 'Guía legal clara y simple (próximamente)',
-    icon: 'gavel.fill',
+    icon: 'lock.fill',
     imageUri:
       'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=75',
   },
@@ -49,7 +49,7 @@ const MODULES: ModuleItem[] = [
     key: 'tramiteseg',
     title: 'TramiteSeg',
     subtitle: 'Trámites y seguridad paso a paso (próximamente)',
-    icon: 'verified.fill',
+    icon: 'info.circle',
     imageUri:
       'https://images.unsplash.com/photo-1557992260-ec58e38d363c?auto=format&fit=crop&w=1200&q=75',
   },

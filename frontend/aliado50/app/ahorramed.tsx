@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { withAlpha } from '@/components/color';
 import { ScreenBackground } from '@/components/screen-background';
@@ -10,11 +10,15 @@ import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { loadAhorraMedHistory, loadAhorraMedHistoryResult, deleteAhorraMedHistoryItem, upsertAhorraMedHistoryItem } from '@/lib/ahorramed-history-store';
+import { putAhorraMedResult } from '@/lib/ahorramed-result-store';
 
 type HistoryItem = {
   id: string;
-  imageUri: string;
   createdAt: number;
+  kind: 'image' | 'text';
+  imageUri?: string;
+  text?: string;
 };
 
 function formatConsultaDate(ts: number) {
@@ -32,7 +36,23 @@ export default function AhorraMedScreen() {
   const colors = Colors[colorScheme];
 
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [queryText, setQueryText] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await loadAhorraMedHistory();
+        if (!cancelled) setHistory(items);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const headerBorder = useMemo(
     () => withAlpha(colors.text, colorScheme === 'dark' ? 0.18 : 0.14),
@@ -84,12 +104,32 @@ export default function AhorraMedScreen() {
   const onConsultar = useCallback(() => {
     if (!selectedImageUri) return;
     const now = Date.now();
-    setHistory((prev) => [
-      { id: `${now}-${Math.random().toString(16).slice(2)}`, imageUri: selectedImageUri, createdAt: now },
-      ...prev,
-    ]);
-    router.push({ pathname: '/ahorramed-loading', params: { imageUri: selectedImageUri } });
+    const item: HistoryItem = {
+      id: `${now}-${Math.random().toString(16).slice(2)}`,
+      kind: 'image',
+      imageUri: selectedImageUri,
+      createdAt: now,
+    };
+    setHistory((prev) => [item, ...prev]);
+    void upsertAhorraMedHistoryItem(item);
+    router.push({ pathname: '/ahorramed-loading', params: { imageUri: selectedImageUri, historyId: item.id } });
   }, [selectedImageUri]);
+
+  const onConsultarTexto = useCallback(() => {
+    const text = queryText.trim();
+    if (!text) return;
+    const now = Date.now();
+    const item: HistoryItem = {
+      id: `${now}-${Math.random().toString(16).slice(2)}`,
+      kind: 'text',
+      text,
+      createdAt: now,
+    };
+    setHistory((prev) => [item, ...prev]);
+    void upsertAhorraMedHistoryItem(item);
+    setQueryText('');
+    router.push({ pathname: '/ahorramed-loading', params: { text, historyId: item.id } });
+  }, [queryText]);
 
   const confirmDelete = useCallback((id: string) => {
     Alert.alert('Eliminar consulta', '¿Seguro que quieres eliminar esta consulta del historial?', [
@@ -97,9 +137,35 @@ export default function AhorraMedScreen() {
       {
         text: 'Eliminar',
         style: 'destructive',
-        onPress: () => setHistory((prev) => prev.filter((h) => h.id !== id)),
+        onPress: () => {
+          setHistory((prev) => prev.filter((h) => h.id !== id));
+          void deleteAhorraMedHistoryItem(id);
+        },
       },
     ]);
+  }, []);
+
+  const openHistoryItem = useCallback(async (h: HistoryItem) => {
+    try {
+      const stored = await loadAhorraMedHistoryResult(h.id);
+      if (!stored) {
+        Alert.alert('Sin resultado guardado', 'Este item aún no tiene un resultado asociado. Realiza una nueva consulta.');
+        return;
+      }
+
+      const resultId = putAhorraMedResult(stored);
+      router.push({
+        pathname: '/ahorramed-analysis',
+        params: {
+          resultId,
+          historyId: h.id,
+          imageUri: h.kind === 'image' ? h.imageUri : undefined,
+          text: h.kind === 'text' ? h.text : undefined,
+        },
+      });
+    } catch {
+      Alert.alert('Error', 'No se pudo abrir este resultado guardado.');
+    }
   }, []);
 
   const onBack = useCallback(() => {
@@ -146,7 +212,8 @@ export default function AhorraMedScreen() {
         <View style={[styles.divider, { backgroundColor: headerBorder }]} />
 
         {!selectedImageUri ? (
-          <View style={styles.actionsRow}>
+          <View style={styles.actionsWrap}>
+            <View style={styles.actionsRow}>
             <Pressable
               accessibilityRole="button"
               onPress={takePhoto}
@@ -180,6 +247,47 @@ export default function AhorraMedScreen() {
               </View>
               <ThemedText type="defaultSemiBold">Subir foto</ThemedText>
             </Pressable>
+            </View>
+
+            <View style={[styles.textSearchCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={styles.textSearchRow}>
+                <View style={[styles.actionIcon, { backgroundColor: withAlpha(colors.tint, 0.18) }]}>
+                  <IconSymbol name="magnifyingglass" size={20} color={colors.tint} />
+                </View>
+
+                <TextInput
+                  value={queryText}
+                  onChangeText={setQueryText}
+                  placeholder="Buscar por texto"
+                  placeholderTextColor={withAlpha(colors.text, 0.45)}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  onSubmitEditing={onConsultarTexto}
+                  style={[styles.textInput, { color: colors.text }]}
+                />
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onConsultarTexto}
+                  disabled={!queryText.trim()}
+                  style={({ pressed, hovered }) => [
+                    styles.textSearchBtn,
+                    {
+                      backgroundColor: queryText.trim() ? withAlpha(colors.tint, 0.92) : withAlpha(colors.text, 0.12),
+                      borderColor: queryText.trim() ? withAlpha(colors.tint, 0.35) : cardBorder,
+                    },
+                    pressed && queryText.trim() ? { opacity: 0.92, transform: [{ scale: 0.99 }] } : null,
+                    hovered && Platform.OS === 'web' ? { opacity: 0.96 } : null,
+                    Platform.OS === 'web' ? ({ cursor: queryText.trim() ? 'pointer' : 'default' } as any) : null,
+                  ]}
+                >
+                  <ThemedText type="defaultSemiBold" style={{ color: queryText.trim() ? '#ffffff' : withAlpha(colors.text, 0.55) }}>
+                    Buscar
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
           </View>
         ) : (
           <View style={styles.previewBlock}>
@@ -253,28 +361,49 @@ export default function AhorraMedScreen() {
           {history.length === 0 ? (
             <View style={[styles.historyEmpty, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               <ThemedText style={{ opacity: 0.82 }}>
-                Aún no hay consultas. Sube o toma una foto para comenzar.
+                Aún no hay consultas. Sube/toma una foto o busca por texto para comenzar.
               </ThemedText>
             </View>
           ) : (
             history.map((h) => (
-              <View
+              <Pressable
                 key={h.id}
-                style={[styles.historyItem, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                accessibilityRole="button"
+                accessibilityLabel="Abrir consulta"
+                onPress={() => void openHistoryItem(h)}
+                style={({ pressed, hovered }) => [
+                  styles.historyItem,
+                  { backgroundColor: cardBg, borderColor: cardBorder },
+                  pressed ? { opacity: 0.92, transform: [{ scale: 0.995 }] } : null,
+                  hovered && Platform.OS === 'web' ? { opacity: 0.96 } : null,
+                  Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : null,
+                ]}
               >
-                <Image
-                  source={{ uri: h.imageUri }}
-                  contentFit="cover"
-                  transition={120}
-                  style={styles.thumb}
-                />
+                {h.kind === 'image' && h.imageUri ? (
+                  <Image
+                    source={{ uri: h.imageUri }}
+                    contentFit="cover"
+                    transition={120}
+                    style={styles.thumb}
+                  />
+                ) : (
+                  <View style={[styles.thumb, styles.thumbText, { backgroundColor: withAlpha(colors.tint, 0.16) }]}>
+                    <IconSymbol name="text.magnifyingglass" size={18} color={colors.tint} />
+                  </View>
+                )}
                 <View style={styles.historyText}>
                   <ThemedText type="defaultSemiBold">Consulta del {formatConsultaDate(h.createdAt)}</ThemedText>
+                  {h.kind === 'text' && h.text ? (
+                    <ThemedText style={{ opacity: 0.78 }} numberOfLines={1}>
+                      {h.text}
+                    </ThemedText>
+                  ) : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Eliminar consulta"
                   onPress={() => confirmDelete(h.id)}
+                  hitSlop={10}
                   style={({ pressed, hovered }) => [
                     styles.deleteButton,
                     { backgroundColor: withAlpha('#000000', colorScheme === 'dark' ? 0.18 : 0.08) },
@@ -285,7 +414,7 @@ export default function AhorraMedScreen() {
                 >
                   <IconSymbol name="trash" size={18} color={withAlpha(colors.text, 0.85)} />
                 </Pressable>
-              </View>
+              </Pressable>
             ))
           )}
         </ScrollView>
@@ -330,10 +459,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+  actionsWrap: {
+    gap: 12,
+    marginBottom: 18,
+  },
+
   actionsRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 18,
   },
   actionCard: {
     flex: 1,
@@ -346,6 +479,30 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  textSearchCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 14,
+  },
+  textSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 10,
+  },
+  textSearchBtn: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -427,6 +584,10 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 14,
+  },
+  thumbText: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   historyText: {
     flex: 1,

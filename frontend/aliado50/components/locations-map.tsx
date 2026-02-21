@@ -5,6 +5,7 @@ import type { WebViewMessageEvent } from 'react-native-webview';
 
 import { withAlpha } from '@/components/color';
 import { ThemedText } from '@/components/themed-text';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -61,7 +62,7 @@ function buildLeafletHtml({
   lines.push('  </head>');
   lines.push('  <body>');
   lines.push('    <div id="map"></div>');
-  lines.push('    <div class="hint"><span class="pill">Demo</span> Toca un marcador para seleccionar la ubicación.</div>');
+  lines.push('    <div class="hint">Toca un marcador para ver la ubicación.</div>');
   lines.push('    <script>');
   lines.push('      function post(msg) { try { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) {} }');
   lines.push('      window.addEventListener("error", function (e) { post({ type: "error", message: String(e && e.message ? e.message : e) }); });');
@@ -171,7 +172,7 @@ export function LocationsMap({
           <ThemedText type="defaultSemiBold">Mapa no disponible</ThemedText>
           <ThemedText style={{ opacity: 0.8 }}>{webViewError}</ThemedText>
           <ThemedText style={{ opacity: 0.75 }}>
-            Mostrando lista de ubicaciones (demo).
+            Mostrando lista de ubicaciones.
           </ThemedText>
         </View>
 
@@ -194,7 +195,12 @@ export function LocationsMap({
                   <ThemedText type="defaultSemiBold">{loc.nombre}</ThemedText>
                   <ThemedText style={{ opacity: 0.78 }}>{metersToKmLabel(loc.distanciaMetros)}</ThemedText>
                 </View>
-                <ThemedText style={{ opacity: 0.86 }}>📍 {loc.direccion}</ThemedText>
+                <View style={styles.locAddress}>
+                  <IconSymbol name="mappin.and.ellipse" size={16} color={withAlpha(colors.text, 0.78)} />
+                  <ThemedText style={{ opacity: 0.86, flex: 1 }} numberOfLines={2}>
+                    {loc.direccion}
+                  </ThemedText>
+                </View>
               </Pressable>
             );
           })}
@@ -234,6 +240,11 @@ export function LocationsMap({
 }
 
 const styles = StyleSheet.create({
+    locAddress: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
   fallbackWrap: {
     width: '100%',
     gap: 10,

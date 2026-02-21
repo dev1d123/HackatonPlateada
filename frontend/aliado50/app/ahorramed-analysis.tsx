@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { withAlpha } from '@/components/color';
@@ -12,39 +12,117 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const analysisMock = require('../mocks/ahorramed-analysis.json') as AhorraMedAnalysisMock;
+import type { MedicationResponse, SearchResponse, UbicacionRecomendacion, UbicacionesRecomendadas } from '@/lib/camera-api';
+import { loadAhorraMedHistoryResult } from '@/lib/ahorramed-history-store';
+import { getAhorraMedResult, putAhorraMedResult } from '@/lib/ahorramed-result-store';
 
 type MockStock = 'disponible' | 'bajo' | 'agotado';
 
 type MockLocation = LocationPoint & {
   stock: MockStock;
+  tipoRecomendacion: string;
+  telefono?: string | null;
+  urlMaps?: string | null;
+  tipo?: string | null;
+  titular?: string | null;
+  fabricante?: string | null;
+  departamento?: string | null;
+  provincia?: string | null;
+  distrito?: string | null;
 };
 
 type MedicamentoMock = {
   id: string;
-  inn: string;
-  presentacion: string;
-  marca: string;
-  forma: string;
-  empaque: string;
+  nom_ifa: string;
+  nom_prod: string;
+  concentracion: string;
+  forma_farmaceutica: string;
+  macro_categoria: string;
   advertencias: string[];
   ubicaciones: MockLocation[];
+  raw: MedicationResponse;
 };
 
-type AhorraMedAnalysisMock = {
-  generatedAt: string;
-  medicamentos: MedicamentoMock[];
-  informacionAdicional: {
-    doctor: string;
-    hospital: string;
-    observaciones: string;
+function buildWarningsFromMedication(med: MedicationResponse) {
+  const warnings: string[] = [];
+  const desc = med.descripcion;
+  const contra = desc?.contraindicaciones ?? null;
+  if (Array.isArray(contra)) warnings.push(...contra.filter((x) => typeof x === 'string' && x.trim()));
+  const adv = desc?.advertencia_si_pasa_esto;
+  if (typeof adv === 'string' && adv.trim()) warnings.push(adv.trim());
+  return warnings;
+}
+
+function toMockStock(totalDisponibles?: number) {
+  if (typeof totalDisponibles === 'number' && totalDisponibles <= 0) return 'agotado' as const;
+  return 'disponible' as const;
+}
+
+function recToLocation(rec: UbicacionRecomendacion, stock: MockStock, idx: number): MockLocation | null {
+  const f = rec.farmacia;
+  const lat = f?.latitud;
+  const lng = f?.longitud;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const precio = typeof f?.precio === 'number' && Number.isFinite(f.precio) ? f.precio : 0;
+  const nombre = `${f?.establecimiento ?? 'Farmacia'} (${recLabel(rec.tipo_recomendacion)})`;
+  const direccion = f?.direccion ?? '';
+  const distanciaKm = typeof rec.distancia_km === 'number' && Number.isFinite(rec.distancia_km) ? rec.distancia_km : null;
+
+  return {
+    id: `${rec.tipo_recomendacion}-${idx}-${String(f?.establecimiento ?? 'farmacia')}`,
+    nombre,
+    distanciaMetros: distanciaKm ? Math.round(distanciaKm * 1000) : 0,
+    direccion,
+    cierraA: '',
+    precio,
+    moneda: 'S/',
+    stock,
+    actualizadoHaceMin: 0,
+    lat: Number(lat),
+    lng: Number(lng),
+    tipoRecomendacion: rec.tipo_recomendacion,
+    telefono: f?.telefono ?? null,
+    urlMaps: f?.url_maps ?? null,
+    tipo: f?.tipo ?? null,
+    titular: f?.titular ?? null,
+    fabricante: f?.fabricante ?? null,
+    departamento: f?.departamento ?? null,
+    provincia: f?.provincia ?? null,
+    distrito: f?.distrito ?? null,
   };
-};
+}
+
+function buildLocations(ubic: UbicacionesRecomendadas | null | undefined): MockLocation[] {
+  if (!ubic) return [];
+  const stock = toMockStock(ubic.total_disponibles);
+  const locs: MockLocation[] = [];
+
+  const candidates = [ubic.mas_barata, ubic.mas_cercana, ubic.mas_equilibrada].filter(Boolean) as UbicacionRecomendacion[];
+  candidates.forEach((rec, idx) => {
+    const loc = recToLocation(rec, stock, idx);
+    if (loc) locs.push(loc);
+  });
+
+  return locs;
+}
 
 function openGoogleMaps(lat: number, lng: number) {
   // Keep it coordinates-only to avoid Google Maps parsing quirks.
   const url = `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
   Linking.openURL(url).catch(() => {});
+}
+
+function openUrl(url?: string | null) {
+  if (!url) return;
+  Linking.openURL(url).catch(() => {});
+}
+
+function recLabel(tipo: string) {
+  if (tipo === 'mas_barata') return 'Más barata';
+  if (tipo === 'mas_cercana') return 'Más cercana';
+  if (tipo === 'mas_equilibrada') return 'Más equilibrada';
+  return tipo;
 }
 
 function stockLabel(stock: MockStock) {
@@ -54,8 +132,67 @@ function stockLabel(stock: MockStock) {
 }
 
 function distanceLabel(meters: number) {
-  if (meters < 1000) return `${meters} m`;
+  if (!Number.isFinite(meters) || meters <= 0) return '—';
+  if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function FieldBlock({
+  icon,
+  title,
+  children,
+  tint,
+  textColor,
+}: {
+  icon: Parameters<typeof IconSymbol>[0]['name'];
+  title: string;
+  children: ReactNode;
+  tint: string;
+  textColor: string;
+}) {
+  return (
+    <View
+      style={[
+        styles.fieldBlock,
+        { borderColor: withAlpha(textColor, 0.12), backgroundColor: withAlpha('#000000', 0.04) },
+      ]}
+    >
+      <View style={styles.fieldHeader}>
+        <View
+          style={[
+            styles.fieldIcon,
+            {
+              backgroundColor: withAlpha(tint, 0.14),
+              borderColor: withAlpha(tint, 0.28),
+            },
+          ]}
+        >
+          <IconSymbol name={icon} size={16} color={tint} />
+        </View>
+        <ThemedText type="defaultSemiBold" style={styles.fieldTitle}>
+          {title}
+        </ThemedText>
+      </View>
+      <View style={styles.fieldBody}>{children}</View>
+    </View>
+  );
+}
+
+function BulletList({ items, textColor }: { items: (string | null | undefined)[]; textColor: string }) {
+  const safe = (items ?? []).filter((t): t is string => typeof t === 'string' && t.trim().length > 0);
+  if (!safe.length) {
+    return <ThemedText style={{ opacity: 0.78 }}>No disponible.</ThemedText>;
+  }
+  return (
+    <View style={styles.bulletList}>
+      {safe.map((t, idx) => (
+        <View key={`${idx}-${t.slice(0, 12)}`} style={styles.bulletRow}>
+          <IconSymbol name="chevron.right" size={16} color={withAlpha(textColor, 0.55)} />
+          <ThemedText style={{ opacity: 0.9, flex: 1 }}>{t}</ThemedText>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function SectionCard({
@@ -125,7 +262,13 @@ function SheetModal({
             </Pressable>
           </View>
 
-          <View style={styles.modalContent}>{children}</View>
+          <ScrollView
+            style={styles.modalContent}
+            contentContainerStyle={styles.modalContentInner}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
 
           <View style={styles.modalFooter}>
             <Pressable
@@ -154,14 +297,13 @@ export default function AhorraMedAnalysisScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
-  const params = useLocalSearchParams<{ imageUri?: string }>();
+  const params = useLocalSearchParams<{ resultId?: string; historyId?: string; imageUri?: string; text?: string }>();
+  const resultId = typeof params.resultId === 'string' ? params.resultId : null;
+  const historyId = typeof params.historyId === 'string' ? params.historyId : null;
   const imageUri = typeof params.imageUri === 'string' ? params.imageUri : null;
+  const textQuery = typeof params.text === 'string' ? params.text : null;
 
-  const [mapForMed, setMapForMed] = useState<MedicamentoMock | null>(null);
-  const [infoForMed, setInfoForMed] = useState<MedicamentoMock | null>(null);
-  const [warnForMed, setWarnForMed] = useState<MedicamentoMock | null>(null);
-
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  const [response, setResponse] = useState<SearchResponse | null>(null);
 
   const cardBg = useMemo(
     () => withAlpha(colors.background, colorScheme === 'dark' ? 0.22 : 0.78),
@@ -185,20 +327,80 @@ export default function AhorraMedAnalysisScreen() {
     router.replace('/ahorramed');
   }, []);
 
-  const medicamentos = analysisMock.medicamentos ?? [];
-  const info = analysisMock.informacionAdicional;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (resultId) {
+        const r = getAhorraMedResult(resultId);
+        if (r) {
+          if (!cancelled) setResponse(r);
+          return;
+        }
+      }
 
-  const selectedLocation = useMemo(() => {
-    const locs: MockLocation[] = mapForMed?.ubicaciones ?? [];
-    if (!locs.length) return null;
-    const found = selectedLocationId ? locs.find((l) => l.id === selectedLocationId) : null;
-    return found ?? locs[0];
-  }, [mapForMed, selectedLocationId]);
+      if (historyId) {
+        try {
+          const stored = await loadAhorraMedHistoryResult(historyId);
+          if (stored) {
+            if (!cancelled) setResponse(stored);
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
 
-  const openMapFor = useCallback((med: MedicamentoMock) => {
-    setSelectedLocationId(med.ubicaciones?.[0]?.id ?? null);
-    setMapForMed(med);
-  }, []);
+      if (cancelled) return;
+      Alert.alert('Consulta no disponible', 'Vuelve a realizar la búsqueda.');
+      router.replace('/ahorramed');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resultId, historyId]);
+
+  const medicamentos = useMemo((): MedicamentoMock[] => {
+    const results = response?.results ?? [];
+          return results.map((r, idx) => {
+      const med = r.medicamento;
+      const advertencias = buildWarningsFromMedication(r);
+      const ubicaciones = buildLocations(r.ubicaciones_recomendadas);
+      const nom_prod = med?.nom_prod ?? 'Medicamento';
+      const nom_ifa = med?.nom_ifa ?? '—';
+      const concentracion = med?.concentracion ?? '—';
+      const forma_farmaceutica = med?.forma_farmaceutica ?? '—';
+      const macro_categoria = med?.macro_categoria ?? '—';
+      return {
+        id: `${idx}-${String(med?.nom_prod ?? 'med')}-${String(med?.concentracion ?? '')}`,
+        nom_ifa,
+        nom_prod,
+        concentracion,
+        forma_farmaceutica,
+        macro_categoria,
+        advertencias,
+        ubicaciones,
+        raw: r,
+      };
+    });
+  }, [response]);
+
+  const openDetailFor = useCallback(
+    (medIndex: number) => {
+      const rid = response ? putAhorraMedResult(response) : null;
+      router.push({
+        pathname: '/ahorramed-med-detail',
+        params: {
+          medIndex: String(medIndex),
+          historyId: historyId ?? undefined,
+          resultId: rid ?? undefined,
+          imageUri: imageUri ?? undefined,
+          text: textQuery ?? undefined,
+        },
+      });
+    },
+    [response, historyId, imageUri, textQuery]
+  );
 
   const onPlanCompras = useCallback(() => {
     Alert.alert('Plan de compras', 'Selecciona una opción (en implementación):', [
@@ -257,7 +459,7 @@ export default function AhorraMedAnalysisScreen() {
           </Pressable>
 
           <ThemedText type="title" style={styles.topTitle}>
-            Análisis de la foto
+            {textQuery ? 'Análisis de la consulta' : 'Análisis de la foto'}
           </ThemedText>
 
           <View style={styles.topSpacer} />
@@ -270,102 +472,108 @@ export default function AhorraMedAnalysisScreen() {
             <View style={[styles.photoCard, { backgroundColor: cardBg, borderColor: border }]}>
               <Image source={{ uri: imageUri }} contentFit="cover" style={styles.photo} transition={140} />
               <View style={styles.photoOverlay}>
-                <ThemedText type="defaultSemiBold">Resultado (demo)</ThemedText>
-                <ThemedText style={{ opacity: 0.78 }}>Medicamentos y ubicaciones simuladas</ThemedText>
+                <ThemedText type="defaultSemiBold">Resultado</ThemedText>
+                <ThemedText style={{ opacity: 0.78 }}>
+                  {response?.feedback_message ?? 'Consulta procesada'}
+                </ThemedText>
               </View>
             </View>
           ) : null}
 
+          {textQuery ? (
+            <View style={[styles.queryChip, { backgroundColor: withAlpha('#000000', 0.06), borderColor: withAlpha(colors.text, 0.14) }]}>
+              <ThemedText type="defaultSemiBold">Búsqueda</ThemedText>
+              <ThemedText style={{ opacity: 0.82 }} numberOfLines={2}>
+                {textQuery}
+              </ThemedText>
+            </View>
+          ) : null}
+
           <SectionCard title="Medicamentos encontrados" backgroundColor={cardBg} borderColor={border}>
+            <View style={styles.medsMetaRow}>
+              <ThemedText style={{ opacity: 0.78 }}>
+                {medicamentos.length} {medicamentos.length === 1 ? 'medicamento' : 'medicamentos'}
+              </ThemedText>
+              <ThemedText style={{ opacity: 0.7 }}>
+                Resumen
+              </ThemedText>
+            </View>
             <View style={styles.medsList}>
-              {medicamentos.map((med) => (
+              {medicamentos.map((med, idx) => (
                 <View key={med.id} style={[styles.medRow, { borderColor: withAlpha(colors.text, 0.12) }]}>
                   <View style={styles.medLeft}>
-                    <ThemedText type="defaultSemiBold" style={{ fontSize: 16 }}>
-                      {med.inn}
+                    <ThemedText type="defaultSemiBold" style={styles.medTitle}>
+                      {med.nom_prod}
                     </ThemedText>
-                    <ThemedText style={{ opacity: 0.76 }}>
-                      INN
+                    <ThemedText style={{ opacity: 0.82 }} numberOfLines={2}>
+                      {med.nom_ifa}
                     </ThemedText>
+                    <View style={styles.chipsRow}>
+                      <View
+                        style={[
+                          styles.chip,
+                          { backgroundColor: withAlpha(colors.tint, 0.14), borderColor: withAlpha(colors.tint, 0.28) },
+                        ]}
+                      >
+                        <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
+                          {med.concentracion}
+                        </ThemedText>
+                      </View>
+                      <View
+                        style={[
+                          styles.chip,
+                          { backgroundColor: withAlpha('#000000', 0.06), borderColor: withAlpha(colors.text, 0.14) },
+                        ]}
+                      >
+                        <ThemedText type="defaultSemiBold" style={{ opacity: 0.92 }}>
+                          {med.forma_farmaceutica}
+                        </ThemedText>
+                      </View>
+                      <View
+                        style={[
+                          styles.chip,
+                          { backgroundColor: withAlpha(colors.tint, 0.10), borderColor: withAlpha(colors.tint, 0.22) },
+                        ]}
+                      >
+                        <ThemedText type="defaultSemiBold" style={{ color: colors.tint, opacity: 0.95 }} numberOfLines={1}>
+                          {med.macro_categoria}
+                        </ThemedText>
+                      </View>
+                    </View>
                   </View>
 
-                  <View style={styles.medActions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Abrir mapa"
-                      onPress={() => openMapFor(med)}
-                      style={({ pressed, hovered }) => [
-                        styles.iconPill,
-                        { backgroundColor: withAlpha(colors.tint, 0.16), borderColor: withAlpha(colors.tint, 0.28) },
-                        pressed ? { opacity: 0.9 } : null,
-                        hovered && Platform.OS === 'web' ? { opacity: 0.96 } : null,
-                        Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : null,
-                      ]}
-                    >
-                      <IconSymbol name="map.fill" size={16} color={colors.tint} />
-                      <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
-                        Mapa
-                      </ThemedText>
-                    </Pressable>
-
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Más información"
-                      onPress={() => setInfoForMed(med)}
-                      style={({ pressed, hovered }) => [
-                        styles.iconCircle,
-                        { backgroundColor: withAlpha('#000000', 0.08), borderColor: withAlpha(colors.text, 0.14) },
-                        pressed ? { opacity: 0.9 } : null,
-                        hovered && Platform.OS === 'web' ? { opacity: 0.96 } : null,
-                        Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : null,
-                      ]}
-                    >
-                      <IconSymbol name="info.circle" size={18} color={withAlpha(colors.text, 0.86)} />
-                    </Pressable>
-
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Advertencias"
-                      onPress={() => setWarnForMed(med)}
-                      style={({ pressed, hovered }) => [
-                        styles.iconCircle,
-                        { backgroundColor: withAlpha('#000000', 0.08), borderColor: withAlpha(colors.text, 0.14) },
-                        pressed ? { opacity: 0.9 } : null,
-                        hovered && Platform.OS === 'web' ? { opacity: 0.96 } : null,
-                        Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : null,
-                      ]}
-                    >
-                      <IconSymbol name="exclamationmark.triangle.fill" size={18} color={withAlpha(colors.text, 0.86)} />
-                    </Pressable>
-                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Ver más"
+                    onPress={() => openDetailFor(idx)}
+                    style={({ pressed, hovered }) => [
+                      styles.moreBtn,
+                      { backgroundColor: withAlpha(colors.tint, 0.14), borderColor: withAlpha(colors.tint, 0.35) },
+                      pressed ? { opacity: 0.9, transform: [{ scale: 0.99 }] } : null,
+                      hovered && Platform.OS === 'web' ? { opacity: 0.96 } : null,
+                      Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : null,
+                    ]}
+                  >
+                    <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
+                      Ver más
+                    </ThemedText>
+                    <IconSymbol name="chevron.right" size={18} color={colors.tint} />
+                  </Pressable>
                 </View>
               ))}
 
               {medicamentos.length === 0 ? (
                 <ThemedText style={{ opacity: 0.8 }}>
-                  No se detectaron medicamentos (demo).
+                  No se detectaron medicamentos.
                 </ThemedText>
               ) : null}
             </View>
           </SectionCard>
 
-          <SectionCard title="Información adicional" backgroundColor={cardBg} borderColor={border}>
-            <View style={styles.infoGrid}>
-              <View style={[styles.infoChip, { backgroundColor: withAlpha(colors.tint, 0.14), borderColor: withAlpha(colors.tint, 0.28) }]}>
-                <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>Doctor</ThemedText>
-                <ThemedText style={{ opacity: 0.88 }}>{info?.doctor ?? '—'}</ThemedText>
-              </View>
-
-              <View style={[styles.infoChip, { backgroundColor: withAlpha(colors.tint, 0.14), borderColor: withAlpha(colors.tint, 0.28) }]}>
-                <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>Hospital</ThemedText>
-                <ThemedText style={{ opacity: 0.88 }}>{info?.hospital ?? '—'}</ThemedText>
-              </View>
-
-              <View style={[styles.infoChipWide, { backgroundColor: withAlpha('#000000', 0.06), borderColor: withAlpha(colors.text, 0.14) }]}>
-                <ThemedText type="defaultSemiBold">Observaciones</ThemedText>
-                <ThemedText style={{ opacity: 0.82 }}>{info?.observaciones ?? '—'}</ThemedText>
-              </View>
-            </View>
+          <SectionCard title="Información" backgroundColor={cardBg} borderColor={border}>
+            <ThemedText style={{ opacity: 0.84 }}>
+              {response?.feedback_message ?? '—'}
+            </ThemedText>
           </SectionCard>
 
           <SectionCard title="Plan de compras" backgroundColor={cardBg} borderColor={border}>
@@ -392,123 +600,6 @@ export default function AhorraMedAnalysisScreen() {
 
           <View style={{ height: 8 }} />
         </ScrollView>
-
-        <SheetModal
-          visible={!!mapForMed}
-          title={mapForMed ? `Mapa · ${mapForMed.inn}` : 'Mapa'}
-          onClose={() => setMapForMed(null)}
-          cardBg={cardBg}
-          borderColor={border}
-          textColor={colors.text}
-          tint={colors.tint}
-        >
-          {mapForMed ? (
-            <View style={{ gap: 12 }}>
-              <ThemedText style={{ opacity: 0.82 }}>
-                Toca una ubicación para ver detalles.
-              </ThemedText>
-
-              <LocationsMap
-                locations={mapForMed.ubicaciones}
-                selectedId={selectedLocation?.id ?? null}
-                onSelect={setSelectedLocationId}
-              />
-
-              {selectedLocation ? (
-                <View style={[styles.locDetail, { backgroundColor: withAlpha('#000000', 0.06), borderColor: withAlpha(colors.text, 0.14) }]}>
-                  <ThemedText type="defaultSemiBold">
-                    {selectedLocation.nombre}
-                  </ThemedText>
-                  <ThemedText style={{ opacity: 0.86 }}>
-                    📍 A {distanceLabel(selectedLocation.distanciaMetros)} – {selectedLocation.direccion}
-                  </ThemedText>
-                  <ThemedText style={{ opacity: 0.86 }}>
-                    🕒 Abierta hasta {selectedLocation.cierraA}
-                  </ThemedText>
-
-                  <View style={styles.locMetaRow}>
-                    <ThemedText type="defaultSemiBold">
-                      💲 {selectedLocation.precio.toFixed(2)} {selectedLocation.moneda}
-                    </ThemedText>
-                    <ThemedText style={{ opacity: 0.86 }}>
-                      📦 {stockLabel(selectedLocation.stock)}
-                    </ThemedText>
-                  </View>
-
-                  <ThemedText style={{ opacity: 0.78 }}>
-                    ⏱ Actualizado hace {selectedLocation.actualizadoHaceMin} min
-                  </ThemedText>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => openGoogleMaps(selectedLocation.lat, selectedLocation.lng)}
-                    style={({ pressed, hovered }) => [
-                      styles.openBtn,
-                      { backgroundColor: withAlpha(colors.tint, 0.14), borderColor: withAlpha(colors.tint, 0.35) },
-                      pressed ? { opacity: 0.9 } : null,
-                      hovered && Platform.OS === 'web' ? { opacity: 0.96 } : null,
-                      Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : null,
-                    ]}
-                  >
-                    <IconSymbol name="mappin.and.ellipse" size={16} color={colors.tint} />
-                    <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
-                      Seleccionar ubicación
-                    </ThemedText>
-                  </Pressable>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-        </SheetModal>
-
-        <SheetModal
-          visible={!!infoForMed}
-          title={infoForMed ? `Información · ${infoForMed.inn}` : 'Información'}
-          onClose={() => setInfoForMed(null)}
-          cardBg={cardBg}
-          borderColor={border}
-          textColor={colors.text}
-          tint={colors.tint}
-        >
-          {infoForMed ? (
-            <View style={{ gap: 10 }}>
-              <ThemedText type="defaultSemiBold" style={{ fontSize: 16 }}>
-                {infoForMed.inn} {infoForMed.presentacion} – {infoForMed.marca}
-              </ThemedText>
-              <ThemedText style={{ opacity: 0.84 }}>
-                {infoForMed.forma} | {infoForMed.empaque}
-              </ThemedText>
-              <ThemedText style={{ opacity: 0.78 }}>
-                (Modo demo) Datos de presentación simulados.
-              </ThemedText>
-            </View>
-          ) : null}
-        </SheetModal>
-
-        <SheetModal
-          visible={!!warnForMed}
-          title={warnForMed ? `Advertencias · ${warnForMed.inn}` : 'Advertencias'}
-          onClose={() => setWarnForMed(null)}
-          cardBg={cardBg}
-          borderColor={border}
-          textColor={colors.text}
-          tint={colors.tint}
-        >
-          {warnForMed ? (
-            <View style={{ gap: 8 }}>
-              {(warnForMed.advertencias ?? []).map((w, idx) => (
-                <View key={`${warnForMed.id}-w-${idx}`} style={styles.warnRow}>
-                  <ThemedText style={{ opacity: 0.9 }}>• {w}</ThemedText>
-                </View>
-              ))}
-              {(!warnForMed.advertencias || warnForMed.advertencias.length === 0) ? (
-                <ThemedText style={{ opacity: 0.8 }}>
-                  No hay advertencias disponibles.
-                </ThemedText>
-              ) : null}
-            </View>
-          ) : null}
-        </SheetModal>
       </View>
     </ScreenBackground>
   );
@@ -576,6 +667,14 @@ const styles = StyleSheet.create({
     gap: 2,
   },
 
+  queryChip: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 6,
+  },
+
   sectionCard: {
     borderWidth: 1,
     borderRadius: 22,
@@ -593,19 +692,49 @@ const styles = StyleSheet.create({
   medsList: {
     gap: 10,
   },
+  medsMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
   medRow: {
     borderWidth: 1,
     borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
   medLeft: {
     flex: 1,
     gap: 2,
+  },
+  moreBtn: {
+    alignSelf: 'flex-end',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  medTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: '100%',
   },
   medActions: {
     flexDirection: 'row',
@@ -688,7 +817,10 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     paddingHorizontal: 14,
+  },
+  modalContentInner: {
     paddingBottom: 14,
+    gap: 12,
   },
   modalFooter: {
     paddingHorizontal: 14,
@@ -715,6 +847,16 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 4,
   },
+  locLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  locMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   openBtn: {
     marginTop: 8,
     borderWidth: 1,
@@ -729,5 +871,62 @@ const styles = StyleSheet.create({
 
   warnRow: {
     paddingVertical: 2,
+  },
+  warnLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+
+  medHeaderCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    gap: 6,
+  },
+  fieldBlock: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    gap: 10,
+  },
+  fieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  fieldIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fieldTitle: {
+    fontSize: 15,
+    lineHeight: 19,
+    opacity: 0.94,
+  },
+  fieldBody: {
+    gap: 8,
+  },
+  bulletList: {
+    gap: 8,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  breadcrumbBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8,
   },
 });
