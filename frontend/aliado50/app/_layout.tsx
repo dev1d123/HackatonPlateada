@@ -66,6 +66,12 @@ export default function RootLayout() {
         <Stack.Screen name="ahorramed-analysis" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
         <Stack.Screen name="ahorramed-med-detail" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
         <Stack.Screen name="ahorramed-lugares" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
+        <Stack.Screen name="legalasi" />
+        <Stack.Screen name="legalasi-loading" options={{ animation: 'fade', animationDuration: 220 }} />
+        <Stack.Screen name="legalasi-analysis" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
+        <Stack.Screen name="tramiteseg" />
+        <Stack.Screen name="tramiteseg-loading" options={{ animation: 'fade', animationDuration: 220 }} />
+        <Stack.Screen name="tramiteseg-analysis" options={{ animation: 'slide_from_right', animationDuration: 280 }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
