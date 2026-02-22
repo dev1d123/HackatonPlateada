@@ -9,15 +9,22 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.hackatonplateada.aliado50",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Necesitamos tu ubicación para recomendar farmacias cercanas."
+        "NSLocationWhenInUseUsageDescription": "Necesitamos tu ubicación para recomendar farmacias cercanas.",
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
       }
     },
     "android": {
+      "package": "com.hackatonplateada.aliado50",
+      "versionCode": 1,
       "permissions": [
+        "RECORD_AUDIO",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -34,6 +41,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-speech-recognition",
       [
         "expo-splash-screen",
         {
@@ -55,6 +63,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5ee219b2-ac5d-4523-a51a-dca43f07c629"
+      }
     }
   }
 }
