@@ -54,3 +54,34 @@ La navegación está en `app/_layout.tsx`.
 ## Notas
 - No hay backend (login real deshabilitado).
 - Los módulos aún no están accesibles (por diseño del MVP).
+
+## Generar instalable (producción)
+Este proyecto ya quedó preparado para EAS Build con perfiles en `eas.json`.
+
+### 1) Instala EAS CLI y autentícate
+```bash
+npm install -g eas-cli
+eas login
+```
+
+### 2) Configura el proyecto EAS (primera vez)
+```bash
+cd frontend/aliado50
+eas build:configure
+```
+
+### 3) Generar APK instalable (pruebas internas)
+```bash
+cd frontend/aliado50
+npm run build:apk
+```
+
+### 4) Generar AAB de producción (Play Store)
+```bash
+cd frontend/aliado50
+npm run build:aab
+```
+
+### Importante
+- Si usas Expo Go, módulos nativos como STT no están disponibles.
+- Para STT nativo, instala un build generado por EAS (APK/AAB).
