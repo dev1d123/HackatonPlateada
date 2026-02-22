@@ -39,17 +39,17 @@ const MODULES: ModuleItem[] = [
   },
   {
     key: 'legalasi',
-    title: 'LegalAsi',
-    subtitle: 'Guía legal clara y simple (próximamente)',
-    icon: 'lock.fill',
+    title: 'AnalizaLegal',
+    subtitle: 'Analiza documentos legales por foto o PDF',
+    icon: 'gavel.fill',
     imageUri:
       'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=75',
   },
   {
     key: 'tramiteseg',
-    title: 'TramiteSeg',
-    subtitle: 'Trámites y seguridad paso a paso (próximamente)',
-    icon: 'info.circle',
+    title: 'ConsultaLegal',
+    subtitle: 'Resuelve dudas legales por texto y voz (Android)',
+    icon: 'verified.fill',
     imageUri:
       'https://images.unsplash.com/photo-1557992260-ec58e38d363c?auto=format&fit=crop&w=1200&q=75',
   },
@@ -192,13 +192,24 @@ export default function DashboardScreen() {
         <View style={styles.list}>
           {MODULES.map((item) => (
             (() => {
-              const enabled = item.key === 'ahorramed';
+              const enabled = item.key === 'ahorramed' || item.key === 'legalasi' || item.key === 'tramiteseg';
               return (
             <Pressable
               key={item.key}
               disabled={!enabled}
               accessibilityRole="button"
-              onPress={enabled ? () => router.push('/ahorramed') : undefined}
+              onPress={
+                enabled
+                  ? () =>
+                      router.push(
+                        item.key === 'ahorramed'
+                          ? '/ahorramed'
+                          : item.key === 'legalasi'
+                            ? '/legalasi'
+                            : '/tramiteseg'
+                      )
+                  : undefined
+              }
               style={({ pressed, hovered }) => [
                 styles.card,
                 {
